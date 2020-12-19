@@ -91,7 +91,7 @@ func (ws *WebhookServer) deleteGR(logger logr.Logger, engineResponse response.En
 		"policyName":        engineResponse.PolicyResponse.Policy,
 		"resourceName":      engineResponse.PolicyResponse.Resource.Name,
 		"resourceKind":      engineResponse.PolicyResponse.Resource.Kind,
-		"ResourceNamespace": engineResponse.PolicyResponse.Resource.Namespace,
+		"resourceNamespace": engineResponse.PolicyResponse.Resource.Namespace,
 	}))
 
 	grList, err := ws.grLister.List(selector)
