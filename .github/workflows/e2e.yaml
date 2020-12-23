@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - 'main'
+      - 'test_ci'
     paths-ignore:
       - 'README.md'
       - 'samples/**'
