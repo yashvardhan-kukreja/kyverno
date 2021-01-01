@@ -93,10 +93,10 @@ func preProcessJSONPatches(mutation kyverno.Mutation, resource unstructured.Unst
 }
 
 // - insert to the end of the list
-// {"op": "add", "path": "/spec/containers/-", {"value": "{"name":"busyboxx","image":"busybox:latest"}"}
+// {"op": "add", "path": "/spec/containers/-", {"value": "{"name":"busybox","image":"busybox:latest"}"}
 
 // - insert value to the certain element of the list
-// {"op": "add", "path": "/spec/containers/1", {"value": "{"name":"busyboxx","image":"busybox:latest"}"}
+// {"op": "add", "path": "/spec/containers/1", {"value": "{"name":"busybox","image":"busybox:latest"}"}
 func getObject(path string, resource map[string]interface{}) (interface{}, error) {
 	var strippedResource interface{}
 	strippedResource = resource

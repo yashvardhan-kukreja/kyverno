@@ -29,7 +29,7 @@ func TestMergePatch(t *testing.T) {
 	}
 }
 
-func Test_PolicyDeserilize(t *testing.T) {
+func Test_PolicyDeserialize(t *testing.T) {
 	rawPolicy := []byte(`
 {
   "apiVersion": "kyverno.io/v1",

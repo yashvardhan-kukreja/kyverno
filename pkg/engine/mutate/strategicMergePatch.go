@@ -29,25 +29,23 @@ func ProcessStrategicMergePatch(ruleName string, overlay interface{}, resource u
 		logger.V(4).Info("finished applying strategicMerge patch", "processingTime", resp.RuleStats.ProcessingTime.String())
 	}()
 
-	// ====== Meet Conditions =======
-	if path, overlayerr := meetConditions(log, resource.UnstructuredContent(), overlay); !reflect.DeepEqual(overlayerr, overlayError{}) {
-		switch overlayerr.statusCode {
+	if path, overlayErr := meetConditions(log, resource.UnstructuredContent(), overlay); !reflect.DeepEqual(overlayErr, overlayError{}) {
+		switch overlayErr.statusCode {
 		// anchor key does not exist in the resource, skip applying policy
 		case conditionNotPresent:
-			log.V(4).Info("skip applying policy", "path", path, "error", overlayerr)
+			log.V(4).Info("skip applying policy", "path", path, "error", overlayErr)
 			log.V(3).Info("skip applying rule", "reason", "conditionNotPresent")
 			resp.Success = true
 			return resp, resource
 		// anchor key is not satisfied in the resource, skip applying policy
 		case conditionFailure:
-			log.V(4).Info("failed to validate condition", "path", path, "error", overlayerr)
+			log.V(4).Info("failed to validate condition", "path", path, "error", overlayErr)
 			log.V(3).Info("skip applying rule", "reason", "conditionFailure")
 			resp.Success = true
-			resp.Message = overlayerr.ErrorMsg()
+			resp.Message = overlayErr.ErrorMsg()
 			return resp, resource
 		}
 	}
-	// ============================
 
 	overlayBytes, err := json.Marshal(overlay)
 	if err != nil {
@@ -64,6 +62,7 @@ func ProcessStrategicMergePatch(ruleName string, overlay interface{}, resource u
 		resp.Message = fmt.Sprintf("failed to process patchStrategicMerge: %v", err)
 		return resp, resource
 	}
+
 	patchedBytes, err := strategicMergePatch(string(base), string(overlayBytes))
 	if err != nil {
 		log.Error(err, "failed to apply patchStrategicMerge")
