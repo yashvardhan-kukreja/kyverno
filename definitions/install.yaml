@@ -2875,7 +2875,7 @@ rules:
   - list
   - get
 - apiGroups:
-  - '*'
+  - ""
   resources:
   - namespaces
   verbs:
@@ -2893,7 +2893,13 @@ rules:
   verbs:
   - get
   - list
-  - update
+  - watch
+- apiGroups:
+  - 'kyverno.io'
+  resources:
+  - 'generaterequest'
+  verbs:
+  - '*'
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -2924,8 +2930,6 @@ rules:
   - events
   - mutatingwebhookconfigurations
   - validatingwebhookconfigurations
-  - certificatesigningrequests
-  - certificatesigningrequests/approval
   verbs:
   - create
   - delete
@@ -2934,28 +2938,6 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - certificates.k8s.io
-  resourceNames:
-  - kubernetes.io/legacy-unknown
-  resources:
-  - certificatesigningrequests
-  - certificatesigningrequests/approval
-  - certificatesigningrequests/status
-  verbs:
-  - create
-  - delete
-  - get
-  - update
-  - watch
-- apiGroups:
-  - certificates.k8s.io
-  resourceNames:
-  - kubernetes.io/legacy-unknown
-  resources:
-  - signers
-  verbs:
-  - approve
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
