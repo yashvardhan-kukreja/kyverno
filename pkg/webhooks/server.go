@@ -33,6 +33,7 @@ import (
 	"github.com/kyverno/kyverno/pkg/webhookconfig"
 	webhookgenerate "github.com/kyverno/kyverno/pkg/webhooks/generate"
 	"github.com/pkg/errors"
+	prom "github.com/prometheus/client_golang/prometheus"
 	v1beta1 "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	informers "k8s.io/client-go/informers/core/v1"
@@ -130,6 +131,8 @@ type WebhookServer struct {
 	grController *generate.Controller
 
 	debug bool
+
+	metricsRegistry *prom.Registry
 }
 
 // NewWebhookServer creates new instance of WebhookServer accordingly to given configuration
@@ -161,6 +164,7 @@ func NewWebhookServer(
 	resCache resourcecache.ResourceCache,
 	grc *generate.Controller,
 	debug bool,
+	metricsRegistry *prom.Registry,
 ) (*WebhookServer, error) {
 
 	if tlsPair == nil {
@@ -208,14 +212,15 @@ func NewWebhookServer(
 		openAPIController: openAPIController,
 		resCache:          resCache,
 		debug:             debug,
+		metricsRegistry:   metricsRegistry,
 	}
 
 	mux := httprouter.New()
-	mux.HandlerFunc("POST", config.MutatingWebhookServicePath, ws.handlerFunc(ws.ResourceMutation, true))
-	mux.HandlerFunc("POST", config.ValidatingWebhookServicePath, ws.handlerFunc(ws.resourceValidation, true))
-	mux.HandlerFunc("POST", config.PolicyMutatingWebhookServicePath, ws.handlerFunc(ws.policyMutation, true))
-	mux.HandlerFunc("POST", config.PolicyValidatingWebhookServicePath, ws.handlerFunc(ws.policyValidation, true))
-	mux.HandlerFunc("POST", config.VerifyMutatingWebhookServicePath, ws.handlerFunc(ws.verifyHandler, false))
+	mux.HandlerFunc("POST", config.MutatingWebhookServicePath, ws.handlerFunc(ws.ResourceMutation, true, ws.metricsRegistry))
+	mux.HandlerFunc("POST", config.ValidatingWebhookServicePath, ws.handlerFunc(ws.resourceValidation, true, ws.metricsRegistry))
+	mux.HandlerFunc("POST", config.PolicyMutatingWebhookServicePath, ws.handlerFunc(ws.policyMutation, true, ws.metricsRegistry))
+	mux.HandlerFunc("POST", config.PolicyValidatingWebhookServicePath, ws.handlerFunc(ws.policyValidation, true, ws.metricsRegistry))
+	mux.HandlerFunc("POST", config.VerifyMutatingWebhookServicePath, ws.handlerFunc(ws.verifyHandler, false, ws.metricsRegistry))
 
 	// Handle Liveness responds to a Kubernetes Liveness probe
 	// Fail this request if Kubernetes should restart this instance
@@ -243,7 +248,7 @@ func NewWebhookServer(
 	return ws, nil
 }
 
-func (ws *WebhookServer) handlerFunc(handler func(request *v1beta1.AdmissionRequest) *v1beta1.AdmissionResponse, filter bool) http.HandlerFunc {
+func (ws *WebhookServer) handlerFunc(handler func(request *v1beta1.AdmissionRequest, metricsRegistry *prom.Registry) *v1beta1.AdmissionResponse, filter bool, metricsRegistry *prom.Registry) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		startTime := time.Now()
 		ws.webhookMonitor.SetTime(startTime)
@@ -269,7 +274,7 @@ func (ws *WebhookServer) handlerFunc(handler func(request *v1beta1.AdmissionRequ
 			return
 		}
 
-		admissionReview.Response = handler(request)
+		admissionReview.Response = handler(request, metricsRegistry)
 		writeResponse(rw, admissionReview)
 		logger.V(4).Info("admission review request processed", "time", time.Since(startTime).String())
 
@@ -291,7 +296,7 @@ func writeResponse(rw http.ResponseWriter, admissionReview *v1beta1.AdmissionRev
 }
 
 // ResourceMutation mutates resource
-func (ws *WebhookServer) ResourceMutation(request *v1beta1.AdmissionRequest) *v1beta1.AdmissionResponse {
+func (ws *WebhookServer) ResourceMutation(request *v1beta1.AdmissionRequest, metricsRegistry *prom.Registry) *v1beta1.AdmissionResponse {
 
 	logger := ws.log.WithName("ResourceMutation").WithValues("uid", request.UID, "kind", request.Kind.Kind, "namespace", request.Namespace, "name", request.Name, "operation", request.Operation)
 
@@ -375,7 +380,7 @@ func (ws *WebhookServer) ResourceMutation(request *v1beta1.AdmissionRequest) *v1
 	}
 }
 
-func (ws *WebhookServer) resourceValidation(request *v1beta1.AdmissionRequest) *v1beta1.AdmissionResponse {
+func (ws *WebhookServer) resourceValidation(request *v1beta1.AdmissionRequest, metricsRegistry *prom.Registry) *v1beta1.AdmissionResponse {
 	logger := ws.log.WithName("Validate").WithValues("uid", request.UID, "kind", request.Kind.Kind, "namespace", request.Namespace, "name", request.Name, "operation", request.Operation)
 	if request.Operation == v1beta1.Delete {
 		ws.handleDelete(request)

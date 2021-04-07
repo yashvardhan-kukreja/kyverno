@@ -17,6 +17,7 @@ import (
 	event "github.com/kyverno/kyverno/pkg/event"
 	"github.com/kyverno/kyverno/pkg/generate"
 	generatecleanup "github.com/kyverno/kyverno/pkg/generate/cleanup"
+	"github.com/kyverno/kyverno/pkg/metrics"
 	"github.com/kyverno/kyverno/pkg/openapi"
 	"github.com/kyverno/kyverno/pkg/policy"
 	"github.com/kyverno/kyverno/pkg/policycache"
@@ -30,6 +31,7 @@ import (
 	"github.com/kyverno/kyverno/pkg/webhookconfig"
 	"github.com/kyverno/kyverno/pkg/webhooks"
 	webhookgenerate "github.com/kyverno/kyverno/pkg/webhooks/generate"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
@@ -48,13 +50,15 @@ var (
 	excludeGroupRole               string
 	excludeUsername                string
 	profilePort                    string
+	metricsPort                    string
 
 	webhookTimeout int
 	genWorkers     int
 
-	profile      bool
-	policyReport bool
-	setupLog     = log.Log.WithName("setup")
+	profile              bool
+	disableMetricsExport bool
+	policyReport         bool
+	setupLog             = log.Log.WithName("setup")
 )
 
 func main() {
@@ -70,6 +74,9 @@ func main() {
 	flag.StringVar(&runValidationInMutatingWebhook, "runValidationInMutatingWebhook", "", "Validation will also be done using the mutation webhook, set to 'true' to enable. Older kubernetes versions do not work properly when a validation webhook is registered.")
 	flag.BoolVar(&profile, "profile", false, "Set this flag to 'true', to enable profiling.")
 	flag.StringVar(&profilePort, "profile-port", "6060", "Enable profiling at given port, default to 6060.")
+	flag.BoolVar(&disableMetricsExport, "disable-metrics", false, "Set this flag to 'true', to enable exposing the metrics.")
+	flag.StringVar(&metricsPort, "metrics-port", "8000", "Expose prometheus metrics at the given port, default to 8000.")
+
 	if err := flag.Set("v", "2"); err != nil {
 		setupLog.Error(err, "failed to set log level")
 		os.Exit(1)
@@ -86,16 +93,35 @@ func main() {
 		os.Exit(1)
 	}
 
+	var profilingServerMux *http.ServeMux
+	var metricsServerMux *http.ServeMux
+	var promConfig *metrics.PromConfig
+
 	if profile {
+		profilingServerMux = http.NewServeMux()
 		addr := ":" + profilePort
 		setupLog.Info("Enable profiling, see details at https://github.com/kyverno/kyverno/wiki/Profiling-Kyverno-on-Kubernetes", "port", profilePort)
 		go func() {
-			if err := http.ListenAndServe(addr, nil); err != nil {
+			if err := http.ListenAndServe(addr, profilingServerMux); err != nil {
 				setupLog.Error(err, "Failed to enable profiling")
 				os.Exit(1)
 			}
 		}()
 
+	}
+
+	if !disableMetricsExport {
+		promConfig = metrics.NewPromConfig()
+		metricsServerMux = http.NewServeMux()
+		metricsServerMux.Handle("/metrics", promhttp.HandlerFor(promConfig.MetricsRegistry, promhttp.HandlerOpts{Timeout: 10 * time.Second}))
+		metricsAddr := ":" + metricsPort
+		setupLog.Info("Enable exposure of metrics, see details at https://github.com/kyverno/kyverno/wiki/Metrics-Kyverno-on-Kubernetes", "port", metricsPort)
+		go func() {
+			if err := http.ListenAndServe(metricsAddr, metricsServerMux); err != nil {
+				setupLog.Error(err, "Failed to enable exposure of metrics")
+				os.Exit(1)
+			}
+		}()
 	}
 
 	// KYVERNO CRD CLIENT
@@ -222,6 +248,7 @@ func main() {
 		kubeInformer.Core().V1().Namespaces(),
 		log.Log.WithName("PolicyController"),
 		rCache,
+		promConfig,
 	)
 
 	if err != nil {
@@ -343,6 +370,7 @@ func main() {
 		rCache,
 		grc,
 		debug,
+		promConfig.MetricsRegistry,
 	)
 
 	if err != nil {

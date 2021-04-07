@@ -2406,6 +2406,8 @@ spec:
   ports:
   - port: 443
     targetPort: https
+  - port: 8000
+    targetPort: 8000
   selector:
     app: kyverno
 ---

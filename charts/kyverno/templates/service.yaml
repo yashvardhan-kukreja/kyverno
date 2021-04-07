@@ -16,5 +16,13 @@ spec:
     {{- if and (eq .Values.service.type "NodePort") (not (empty .Values.service.nodePort)) }}
     nodePort: {{ .Values.service.nodePort }}
     {{- end }}
+
+  - port: {{ .Values.service.metricsPort }}
+    targetPort: 8000
+    protocol: TCP
+    name: https
+    {{- if and (eq .Values.service.type "NodePort") (not (empty .Values.service.nodePort)) }}
+    nodePort: {{ .Values.service.metricsNodePort }}
+    {{- end }}
   selector: {{ include "kyverno.matchLabels" . | nindent 4 }}
   type: {{ .Values.service.type }}

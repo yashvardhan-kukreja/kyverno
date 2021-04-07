@@ -10,11 +10,12 @@ import (
 	logr "github.com/go-logr/logr"
 	kyverno "github.com/kyverno/kyverno/pkg/api/kyverno/v1"
 	"github.com/kyverno/kyverno/pkg/policymutation"
+	prom "github.com/prometheus/client_golang/prometheus"
 	v1beta1 "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func (ws *WebhookServer) policyMutation(request *v1beta1.AdmissionRequest) *v1beta1.AdmissionResponse {
+func (ws *WebhookServer) policyMutation(request *v1beta1.AdmissionRequest, metricsRegistry *prom.Registry) *v1beta1.AdmissionResponse {
 	logger := ws.log.WithValues("action", "policy mutation", "uid", request.UID, "kind", request.Kind, "namespace", request.Namespace, "name", request.Name, "operation", request.Operation)
 	var policy *kyverno.ClusterPolicy
 	raw := request.Object.Raw
