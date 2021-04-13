@@ -49,7 +49,7 @@ func NewPromConfig() *PromConfig {
 	)
 
 	policyChangesLabels := []string{
-		"policy_validation_mode", "policy_type", "policy_background_mode", "policy_namespace", "policy_name", "policy_change_type",
+		"policy_validation_mode", "policy_type", "policy_background_mode", "policy_namespace", "policy_name", "policy_change_type", "timestamp",
 	}
 	policyChangesMetric := prom.NewGaugeVec(
 		prom.GaugeOpts{
