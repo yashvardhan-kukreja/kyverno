@@ -147,7 +147,7 @@ func buildPolicyResults(resps []*response.EngineResponse) map[string][]*report.P
 			}
 		}
 	}
-
+	// go-routine which iterates over the results(the map) and builds the metrics over them
 	return results
 }
 

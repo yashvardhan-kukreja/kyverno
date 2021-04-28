@@ -2,6 +2,7 @@ package webhooks
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"sort"
 	"time"
@@ -13,6 +14,8 @@ import (
 	"github.com/kyverno/kyverno/pkg/engine/context"
 	"github.com/kyverno/kyverno/pkg/engine/response"
 	engineutils "github.com/kyverno/kyverno/pkg/engine/utils"
+	"github.com/kyverno/kyverno/pkg/metrics"
+	policyRuleResults "github.com/kyverno/kyverno/pkg/metrics/policy_rule_results"
 	v1beta1 "k8s.io/api/admission/v1beta1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -24,7 +27,8 @@ func (ws *WebhookServer) HandleMutation(
 	resource unstructured.Unstructured,
 	policies []*kyverno.ClusterPolicy,
 	ctx *context.Context,
-	userRequestInfo kyverno.RequestInfo) []byte {
+	userRequestInfo kyverno.RequestInfo,
+	admissionRequestTimestamp int64) []byte {
 
 	if len(policies) == 0 {
 		return nil
@@ -87,6 +91,19 @@ func (ws *WebhookServer) HandleMutation(
 
 		policyContext.NewResource = engineResponse.PatchedResource
 		engineResponses = append(engineResponses, engineResponse)
+
+		// registering the metrics concurrently
+		go func(resourceRequestOperation string, policy kyverno.ClusterPolicy, engineResponse response.EngineResponse, admissionRequestTimestamp int64) {
+			fmt.Println("applying mutation metric")
+			resourceRequestOperationPromAlias, err := policyRuleResults.ParseResourceRequestOperation(resourceRequestOperation)
+			if err != nil {
+				logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_results metrics for the above policy", "name", policy.Name)
+			}
+			if err := policyRuleResults.ParsePromMetrics(*ws.promConfig.Metrics).ProcessEngineResponse(policy, engineResponse, metrics.AdmissionRequest, resourceRequestOperationPromAlias, admissionRequestTimestamp); err != nil {
+				logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_results metrics for the above policy", "name", policy.Name)
+			}
+		}(string(request.Operation), *policy, *engineResponse, admissionRequestTimestamp)
+
 	}
 
 	// generate annotations

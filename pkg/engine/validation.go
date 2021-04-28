@@ -77,6 +77,7 @@ func buildResponse(logger logr.Logger, ctx *PolicyContext, resp *response.Engine
 	resp.PolicyResponse.Resource.APIVersion = resp.PatchedResource.GetAPIVersion()
 	resp.PolicyResponse.ValidationFailureAction = ctx.Policy.Spec.ValidationFailureAction
 	resp.PolicyResponse.ProcessingTime = time.Since(startTime)
+	resp.PolicyResponse.PolicyExecutionTimestamp = startTime.Unix()
 }
 
 func incrementAppliedCount(resp *response.EngineResponse) {
@@ -146,7 +147,9 @@ func validateResource(log logr.Logger, ctx *PolicyContext) *response.EngineRespo
 				Message: rule.Validation.Message,
 				Success: !deny,
 			}
-
+			// response.RuleResponse - ruleName, ruleType, ruleMessage, ruleSuccess, (ruleExecutionCause = "admission_request")
+			// response.EngineResponse.PolicyResponse.ResourceSpec - resourceName, resourceNamespace, resourceKind
+			// policyContext - policyValidationMode, policyType, policyBackgroundMode, policyNamespace, policyName
 			incrementAppliedCount(resp)
 			resp.PolicyResponse.Rules = append(resp.PolicyResponse.Rules, ruleResp)
 		}
@@ -223,6 +226,7 @@ func validatePatterns(log logr.Logger, ctx context.EvalInterface, resource unstr
 	resp.Type = utils.Validation.String()
 	defer func() {
 		resp.RuleStats.ProcessingTime = time.Since(startTime)
+		resp.RuleStats.RuleExecutionTimestamp = startTime.Unix()
 		logger.V(4).Info("finished processing rule", "processingTime", resp.RuleStats.ProcessingTime.String())
 	}()
 

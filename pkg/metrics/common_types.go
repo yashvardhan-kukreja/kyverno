@@ -50,7 +50,8 @@ const (
 type ResourceRequestOperation string
 
 const (
-	ResourceCreated ResourceRequestOperation = "create"
-	ResourceUpdated ResourceRequestOperation = "update"
-	ResourceDeleted ResourceRequestOperation = "delete"
+	ResourceCreated   ResourceRequestOperation = "create"
+	ResourceUpdated   ResourceRequestOperation = "update"
+	ResourceDeleted   ResourceRequestOperation = "delete"
+	ResourceConnected ResourceRequestOperation = "connect"
 )

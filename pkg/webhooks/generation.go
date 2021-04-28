@@ -26,10 +26,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
+
+	"github.com/kyverno/kyverno/pkg/metrics"
+	policyRuleResults "github.com/kyverno/kyverno/pkg/metrics/policy_rule_results"
 )
 
 //HandleGenerate handles admission-requests for policies with generate rules
-func (ws *WebhookServer) HandleGenerate(request *v1beta1.AdmissionRequest, policies []*kyverno.ClusterPolicy, ctx *context.Context, userRequestInfo kyverno.RequestInfo, dynamicConfig config.Interface) {
+func (ws *WebhookServer) HandleGenerate(request *v1beta1.AdmissionRequest, policies []*kyverno.ClusterPolicy, ctx *context.Context, userRequestInfo kyverno.RequestInfo, dynamicConfig config.Interface, admissionRequestTimestamp int64) {
 	logger := ws.log.WithValues("action", "generation", "uid", request.UID, "kind", request.Kind, "namespace", request.Namespace, "name", request.Name, "operation", request.Operation)
 	logger.V(4).Info("incoming request")
 	var engineResponses []*response.EngineResponse
@@ -77,6 +80,18 @@ func (ws *WebhookServer) HandleGenerate(request *v1beta1.AdmissionRequest, polic
 					resp: engineResponse,
 				})
 			}
+
+			// registering the metrics concurrently
+			go func(resourceRequestOperation string, policy kyverno.ClusterPolicy, engineResponse response.EngineResponse, admissionRequestTimestamp int64) {
+				fmt.Println("applying mutation metric")
+				resourceRequestOperationPromAlias, err := policyRuleResults.ParseResourceRequestOperation(resourceRequestOperation)
+				if err != nil {
+					logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_results metrics for the above policy", "name", policy.Name)
+				}
+				if err := policyRuleResults.ParsePromMetrics(*ws.promConfig.Metrics).ProcessEngineResponse(policy, engineResponse, metrics.AdmissionRequest, resourceRequestOperationPromAlias, admissionRequestTimestamp); err != nil {
+					logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_results metrics for the above policy", "name", policy.Name)
+				}
+			}(string(request.Operation), *policy, *engineResponse, admissionRequestTimestamp)
 		}
 
 		// Adds Generate Request to a channel(queue size 1000) to generators

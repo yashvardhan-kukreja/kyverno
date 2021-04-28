@@ -22,12 +22,16 @@ import (
 	v1beta1 "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	"github.com/kyverno/kyverno/pkg/metrics"
+	policyRuleResults "github.com/kyverno/kyverno/pkg/metrics/policy_rule_results"
 )
 
 // HandleValidation handles validating webhook admission request
 // If there are no errors in validating rule we apply generation rules
 // patchedResource is the (resource + patches) after applying mutation rules
 func HandleValidation(
+	promConfig *metrics.PromConfig,
 	request *v1beta1.AdmissionRequest,
 	policies []*kyverno.ClusterPolicy,
 	patchedResource []byte,
@@ -40,7 +44,8 @@ func HandleValidation(
 	dynamicConfig config.Interface,
 	resCache resourcecache.ResourceCache,
 	client *client.Client,
-	namespaceLabels map[string]string) (bool, string) {
+	namespaceLabels map[string]string,
+	admissionRequestTimestamp int64) (bool, string) {
 
 	if len(policies) == 0 {
 		return true, ""
@@ -99,6 +104,18 @@ func HandleValidation(
 			continue
 		}
 
+		// registering the metrics concurrently
+		go func(requestOperation string, policy kyverno.ClusterPolicy, engineResponse response.EngineResponse, admissionRequestTimestamp int64) {
+			// registering the policy_rule_results_metric
+			resourceRequestOperationPromAlias, err := policyRuleResults.ParseResourceRequestOperation(requestOperation)
+			if err != nil {
+				logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_results metrics for the above policy", "name", policy.Name)
+			}
+			if err := policyRuleResults.ParsePromMetrics(*promConfig.Metrics).ProcessEngineResponse(policy, engineResponse, metrics.AdmissionRequest, resourceRequestOperationPromAlias, admissionRequestTimestamp); err != nil {
+				logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_results metrics for the above policy", "name", policy.Name)
+			}
+		}(string(request.Operation), policyContext.Policy, *engineResponse, admissionRequestTimestamp)
+
 		engineResponses = append(engineResponses, engineResponse)
 		statusListener.Update(validateStats{
 			resp:      engineResponse,
@@ -139,6 +156,7 @@ func HandleValidation(
 	prInfos := policyreport.GeneratePRsFromEngineResponse(engineResponses, logger)
 	prGenerator.Add(prInfos...)
 
+	// this too
 	if request.Operation == v1beta1.Delete {
 		prGenerator.Add(buildDeletionPrInfo(oldR))
 	}

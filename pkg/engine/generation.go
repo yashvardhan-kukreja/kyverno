@@ -76,7 +76,8 @@ func filterRule(rule kyverno.Rule, policyContext *PolicyContext) *response.RuleR
 				Type:    "Generation",
 				Success: false,
 				RuleStats: response.RuleStats{
-					ProcessingTime: time.Since(startTime),
+					ProcessingTime:         time.Since(startTime),
+					RuleExecutionTimestamp: startTime.Unix(),
 				},
 			}
 		}
@@ -111,7 +112,8 @@ func filterRule(rule kyverno.Rule, policyContext *PolicyContext) *response.RuleR
 		Type:    "Generation",
 		Success: true,
 		RuleStats: response.RuleStats{
-			ProcessingTime: time.Since(startTime),
+			ProcessingTime:         time.Since(startTime),
+			RuleExecutionTimestamp: startTime.Unix(),
 		},
 	}
 }

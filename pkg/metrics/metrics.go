@@ -27,7 +27,7 @@ func NewPromConfig() *PromConfig {
 		"policy_validation_mode", "policy_type", "policy_background_mode", "policy_name", "policy_namespace",
 		"resource_name", "resource_kind", "resource_namespace", "resource_request_operation",
 		"rule_name", "rule_result", "rule_type", "rule_execution_cause", "rule_response",
-		"admission_request_timestamp", "policy_execution_timestamp", "rule_execution_timestamp",
+		"main_request_trigger_timestamp", "policy_execution_timestamp", "rule_execution_timestamp",
 	}
 	policyRuleResultsMetric := prom.NewGaugeVec(
 		prom.GaugeOpts{

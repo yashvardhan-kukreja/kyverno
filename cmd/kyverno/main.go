@@ -311,6 +311,7 @@ func main() {
 		configData,
 		rCache,
 		client,
+		promConfig,
 	)
 
 	certRenewer := ktls.NewCertRenewer(client, clientConfig, ktls.CertRenewalInterval, ktls.CertValidityDuration, log.Log.WithName("CertRenewer"))
@@ -370,7 +371,7 @@ func main() {
 		rCache,
 		grc,
 		debug,
-		promConfig.MetricsRegistry,
+		promConfig,
 	)
 
 	if err != nil {
