@@ -13,6 +13,7 @@ import (
 	"github.com/kyverno/kyverno/pkg/engine/response"
 	"github.com/kyverno/kyverno/pkg/metrics"
 	policyRuleResults "github.com/kyverno/kyverno/pkg/metrics/policy_rule_results"
+	policyRuleExecutionLatency "github.com/kyverno/kyverno/pkg/metrics/policy_rule_execution_latency"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -82,9 +83,19 @@ func (pc *PolicyController) applyAndReportPerNamespace(policy *kyverno.ClusterPo
 
 	if !*metricAlreadyRegistered && len(engineResponses) > 0 {
 		for _, engineResponse := range engineResponses {
-			if err := policyRuleResults.ParsePromMetrics(*pc.promConfig.Metrics).ProcessEngineResponse(*policy, *engineResponse, metrics.BackgroundScan, metrics.ResourceCreated, backgroundScanTimestamp); err != nil {
-				logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_results metrics for the above policy", "name", policy.Name)
-			}
+			// registering the kyverno_policy_rule_results metric concurrently
+			go func(policy kyverno.ClusterPolicy, engineResponse response.EngineResponse, backgroundScanTimestamp int64) {
+				if err := policyRuleResults.ParsePromMetrics(*pc.promConfig.Metrics).ProcessEngineResponse(policy, engineResponse, metrics.BackgroundScan, metrics.ResourceCreated, backgroundScanTimestamp); err != nil {
+					logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_results metrics for the above policy", "name", policy.Name)
+				}
+			}(*policy, *engineResponse, backgroundScanTimestamp)
+
+			// registering the kyverno_policy_rule_execution_latency metric concurrently
+			go func(policy kyverno.ClusterPolicy, engineResponse response.EngineResponse, backgroundScanTimestamp int64) {
+				if err := policyRuleExecutionLatency.ParsePromMetrics(*pc.promConfig.Metrics).ProcessEngineResponse(policy, engineResponse, metrics.BackgroundScan, "", metrics.ResourceCreated, backgroundScanTimestamp); err != nil {
+					logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_execution_latency metrics for the above policy", "name", policy.Name)
+				}
+			}(*policy, *engineResponse, backgroundScanTimestamp)
 		}
 		*metricAlreadyRegistered = true
 	}

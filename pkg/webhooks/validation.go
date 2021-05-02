@@ -25,6 +25,7 @@ import (
 
 	"github.com/kyverno/kyverno/pkg/metrics"
 	policyRuleResults "github.com/kyverno/kyverno/pkg/metrics/policy_rule_results"
+	policyRuleExecutionLatency "github.com/kyverno/kyverno/pkg/metrics/policy_rule_execution_latency"
 )
 
 // HandleValidation handles validating webhook admission request
@@ -104,9 +105,8 @@ func HandleValidation(
 			continue
 		}
 
-		// registering the metrics concurrently
+		// registering the kyverno_policy_rule_results metric concurrently
 		go func(requestOperation string, policy kyverno.ClusterPolicy, engineResponse response.EngineResponse, admissionRequestTimestamp int64) {
-			// registering the policy_rule_results_metric
 			resourceRequestOperationPromAlias, err := policyRuleResults.ParseResourceRequestOperation(requestOperation)
 			if err != nil {
 				logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_results metrics for the above policy", "name", policy.Name)
@@ -115,6 +115,19 @@ func HandleValidation(
 				logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_results metrics for the above policy", "name", policy.Name)
 			}
 		}(string(request.Operation), policyContext.Policy, *engineResponse, admissionRequestTimestamp)
+
+		// registering the kyverno_policy_rule_execution_latency metric concurrently
+		go func(requestOperation string, policy kyverno.ClusterPolicy, engineResponse response.EngineResponse, admissionRequestTimestamp int64) {
+			resourceRequestOperationPromAlias, err := policyRuleExecutionLatency.ParseResourceRequestOperation(requestOperation)
+			if err != nil {
+				logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_execution_latency metrics for the above policy", "name", policy.Name)
+			}
+			if err := policyRuleExecutionLatency.ParsePromMetrics(*promConfig.Metrics).ProcessEngineResponse(policy, engineResponse, metrics.AdmissionRequest, "", resourceRequestOperationPromAlias, admissionRequestTimestamp); err != nil {
+				logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_execution_latency metrics for the above policy", "name", policy.Name)
+			}
+		}(string(request.Operation), policyContext.Policy, *engineResponse, admissionRequestTimestamp)
+
+		
 
 		engineResponses = append(engineResponses, engineResponse)
 		statusListener.Update(validateStats{

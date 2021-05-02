@@ -62,7 +62,8 @@ func NewPromConfig() *PromConfig {
 	policyRuleExecutionLatencyLabels := []string{
 		"policy_validation_mode", "policy_type", "policy_background_mode", "policy_name", "policy_namespace",
 		"resource_name", "resource_kind", "resource_namespace", "resource_request_operation",
-		"rule_name", "rule_result", "rule_type", "rule_execution_cause", "rule_response",
+		"rule_name", "rule_result", "rule_type", "rule_execution_cause", "rule_response", "generate_rule_latency_type",
+		"main_request_trigger_timestamp", "policy_execution_timestamp", "rule_execution_timestamp",
 	}
 	policyRuleExecutionLatencyMetric := prom.NewGaugeVec(
 		prom.GaugeOpts{
