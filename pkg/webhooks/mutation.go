@@ -21,17 +21,17 @@ import (
 )
 
 // HandleMutation handles mutating webhook admission request
-// return value: generated patches
+// return value: generated patches, triggered policies, engine responses correspdonding to the triggered policies
 func (ws *WebhookServer) HandleMutation(
 	request *v1beta1.AdmissionRequest,
 	resource unstructured.Unstructured,
 	policies []*kyverno.ClusterPolicy,
 	ctx *context.Context,
 	userRequestInfo kyverno.RequestInfo,
-	admissionRequestTimestamp int64) []byte {
+	admissionRequestTimestamp int64,) ([]byte, []kyverno.ClusterPolicy, []*response.EngineResponse) {
 
 	if len(policies) == 0 {
-		return nil
+		return nil, nil, nil
 	}
 
 	resourceName := request.Kind.Kind + "/" + request.Name
@@ -43,6 +43,7 @@ func (ws *WebhookServer) HandleMutation(
 
 	var patches [][]byte
 	var engineResponses []*response.EngineResponse
+	var triggeredPolicies []kyverno.ClusterPolicy
 	policyContext := &engine.PolicyContext{
 		NewResource:         resource,
 		AdmissionInfo:       userRequestInfo,
@@ -91,6 +92,7 @@ func (ws *WebhookServer) HandleMutation(
 
 		policyContext.NewResource = engineResponse.PatchedResource
 		engineResponses = append(engineResponses, engineResponse)
+		triggeredPolicies = append(triggeredPolicies, *policy)
 
 		// registering the kyverno_policy_rule_results metric concurrently
 		go func(resourceRequestOperation string, policy kyverno.ClusterPolicy, engineResponse response.EngineResponse, admissionRequestTimestamp int64) {
@@ -145,7 +147,7 @@ func (ws *WebhookServer) HandleMutation(
 	}()
 
 	// patches holds all the successful patches, if no patch is created, it returns nil
-	return engineutils.JoinPatches(patches)
+	return engineutils.JoinPatches(patches), triggeredPolicies, engineResponses
 }
 
 type mutateStats struct {

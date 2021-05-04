@@ -79,7 +79,6 @@ func (pm PromMetrics) ProcessEngineResponse(policy kyverno.ClusterPolicy, engine
 
 	for _, rule := range ruleResponses {
 		ruleName := rule.Name
-		fmt.Println("rule type: ", rule.Type)
 		ruleType := ParseRuleTypeFromEngineRuleResponse(rule)
 		ruleResponse := rule.Message
 		ruleResult := metrics.Fail

@@ -41,6 +41,8 @@ import (
 	listerv1 "k8s.io/client-go/listers/core/v1"
 	rbaclister "k8s.io/client-go/listers/rbac/v1"
 	"k8s.io/client-go/tools/cache"
+	"github.com/kyverno/kyverno/pkg/engine/response"
+	admissionReviewLatency "github.com/kyverno/kyverno/pkg/metrics/admission_review_latency"
 )
 
 // WebhookServer contains configured TLS server with MutationWebhook.
@@ -359,18 +361,52 @@ func (ws *WebhookServer) ResourceMutation(request *v1beta1.AdmissionRequest) *v1
 	patchedResource := request.Object.Raw
 
 	// MUTATION
-	patches = ws.HandleMutation(request, resource, mutatePolicies, ctx, userRequestInfo, admissionRequestTimestamp)
+	registerMutatePolicyAdmissionReviewLatencyMetric := func(promMetrics metrics.PromMetrics, requestOperation string, engineResponses []*response.EngineResponse, triggeredPolicies []v1.ClusterPolicy, admissionReviewLatencyDuration int64) {
+		resourceRequestOperationPromAlias, err := admissionReviewLatency.ParseResourceRequestOperation(requestOperation)
+		if err != nil {
+			logger.V(4).Error(err, "error occurred while registering kyverno_admission_review_latency metrics")
+		}
+		if err := admissionReviewLatency.ParsePromMetrics(promMetrics).ProcessEngineResponses(engineResponses, triggeredPolicies, admissionReviewLatencyDuration, resourceRequestOperationPromAlias); err != nil {
+			logger.V(4).Error(err, "error occurred while registering kyverno_admission_review_latency metrics")
+		}
+	}
+	var triggeredMutatePolicies []v1.ClusterPolicy
+	var mutateEngineResponses []*response.EngineResponse
+
+	patches, triggeredMutatePolicies, mutateEngineResponses = ws.HandleMutation(request, resource, mutatePolicies, ctx, userRequestInfo, admissionRequestTimestamp)
 	logger.V(6).Info("", "generated patches", string(patches))
 
 	// patch the resource with patches before handling validation rules
 	patchedResource = processResourceWithPatches(patches, request.Object.Raw, logger)
 	logger.V(6).Info("", "patchedResource", string(patchedResource))
 
+	admissionReviewLatencyDuration := int64(time.Since(time.Unix(admissionRequestTimestamp, 0)))
+	go registerMutatePolicyAdmissionReviewLatencyMetric(*ws.promConfig.Metrics, string(request.Operation), mutateEngineResponses, triggeredMutatePolicies, admissionReviewLatencyDuration)
+
 	// GENERATE
 	newRequest := request.DeepCopy()
 	newRequest.Object.Raw = patchedResource
-	go ws.HandleGenerate(newRequest, generatePolicies, ctx, userRequestInfo, ws.configHandler, admissionRequestTimestamp)
 
+	registerGeneratePolicyAdmissionReviewLatencyMetric := func(promMetrics metrics.PromMetrics, requestOperation string, engineResponses []*response.EngineResponse, triggeredPolicies []v1.ClusterPolicy, latencyReceiver *chan int64) {
+		defer close(*latencyReceiver)
+		resourceRequestOperationPromAlias, err := admissionReviewLatency.ParseResourceRequestOperation(requestOperation)
+		if err != nil {
+			logger.V(4).Error(err, "error occurred while registering kyverno_admission_review_latency metrics")
+		}
+		// this goroutine will keep on waiting here till it doesn't receive the admission review latency int64 from the other goroutine i.e. ws.HandleGenerate
+		admissionReviewLatencyDuration := <-(*latencyReceiver)
+		if err := admissionReviewLatency.ParsePromMetrics(promMetrics).ProcessEngineResponses(engineResponses, triggeredPolicies, admissionReviewLatencyDuration, resourceRequestOperationPromAlias); err != nil {
+			logger.V(4).Error(err, "error occurred while registering kyverno_admission_review_latency metrics")
+		}
+	}
+
+	// this channel will be used to transmit the admissionReviewLatency from ws.HandleGenerate(..,) goroutine to registeGeneraterPolicyAdmissionReviewLatencyMetric(...) goroutine
+	admissionReviewCompletionLatencyChannel := make(chan int64, 1)
+
+	go ws.HandleGenerate(newRequest, generatePolicies, ctx, userRequestInfo, ws.configHandler, admissionRequestTimestamp, &admissionReviewCompletionLatencyChannel)
+	
+	// registering the kyverno_admission_review_latency metric concurrently
+	go registerGeneratePolicyAdmissionReviewLatencyMetric(*ws.promConfig.Metrics, string(request.Operation), mutateEngineResponses, triggeredMutatePolicies, &admissionReviewCompletionLatencyChannel)
 	patchType := v1beta1.PatchTypeJSONPatch
 	return &v1beta1.AdmissionResponse{
 		Allowed: true,

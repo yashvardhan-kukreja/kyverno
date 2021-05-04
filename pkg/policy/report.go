@@ -10,7 +10,6 @@ import (
 )
 
 func (pc *PolicyController) report(policy string, engineResponses []*response.EngineResponse, logger logr.Logger) {
-	fmt.Println("report() called")
 	eventInfos := generateEvents(logger, engineResponses)
 	pc.eventGen.Add(eventInfos...)
 

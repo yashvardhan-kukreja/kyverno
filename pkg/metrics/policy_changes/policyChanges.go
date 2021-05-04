@@ -2,6 +2,7 @@ package policy_changes
 
 import (
 	"fmt"
+	"time"
 	kyverno "github.com/kyverno/kyverno/pkg/api/kyverno/v1"
 	"github.com/kyverno/kyverno/pkg/metrics"
 	prom "github.com/prometheus/client_golang/prometheus"
@@ -25,7 +26,7 @@ func (pm PromMetrics) registerPolicyChangesMetric(
 		"policy_namespace":       policyNamespace,
 		"policy_name":            policyName,
 		"policy_change_type":     string(policyChangeType),
-		"timestamp":              fmt.Sprintf("%d", policyChangeTimestamp),
+		"timestamp":              fmt.Sprintf("%+v", time.Unix(policyChangeTimestamp, 0)),
 	}).Set(1)
 	return nil
 }

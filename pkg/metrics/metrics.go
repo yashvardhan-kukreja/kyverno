@@ -15,7 +15,6 @@ type PromMetrics struct {
 	PolicyChanges              *prom.GaugeVec
 	PolicyRuleExecutionLatency *prom.GaugeVec
 	AdmissionReviewLatency     *prom.GaugeVec
-	//TODO: think about the kyverno_cpu_usage, kyverno_memory_usage metric
 }
 
 func NewPromConfig() *PromConfig {

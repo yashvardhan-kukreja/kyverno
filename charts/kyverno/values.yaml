@@ -109,7 +109,6 @@ config:
   # as a nested YAML list. These are joined together without spaces in the configmap
   resourceFilters:
   - "[Event,*,*]"
-  - "[*,kube-system,*]"
   - "[*,kube-public,*]"
   - "[*,kube-node-lease,*]"
   - "[Node,*,*]"
