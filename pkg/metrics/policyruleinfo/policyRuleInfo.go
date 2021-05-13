@@ -1,19 +1,20 @@
-package policy_rule_count
+package policyruleinfo
 
 import (
 	"fmt"
+
 	kyverno "github.com/kyverno/kyverno/pkg/api/kyverno/v1"
 	"github.com/kyverno/kyverno/pkg/metrics"
 	prom "github.com/prometheus/client_golang/prometheus"
 )
 
-func (pm PromMetrics) registerPolicyRuleCountMetric(
+func (pm PromMetrics) registerPolicyRuleInfoMetric(
 	policyValidationMode metrics.PolicyValidationMode,
 	policyType metrics.PolicyType,
 	policyBackgroundMode metrics.PolicyBackgroundMode,
 	policyNamespace, policyName, ruleName string,
 	ruleType metrics.RuleType,
-	metricChangeType PolicyRuleCountMetricChangeType,
+	metricChangeType PolicyRuleInfoMetricChangeType,
 ) error {
 	var metricValue float64
 	switch metricChangeType {
@@ -29,7 +30,7 @@ func (pm PromMetrics) registerPolicyRuleCountMetric(
 		policyNamespace = "-"
 	}
 
-	pm.PolicyRuleCount.With(prom.Labels{
+	pm.PolicyRuleInfo.With(prom.Labels{
 		"policy_validation_mode": string(policyValidationMode),
 		"policy_type":            string(policyType),
 		"policy_background_mode": string(policyBackgroundMode),
@@ -58,7 +59,7 @@ func (pm PromMetrics) AddPolicy(policy interface{}) error {
 			ruleName := rule.Name
 			ruleType := metrics.ParseRuleType(rule)
 
-			if err = pm.registerPolicyRuleCountMetric(policyValidationMode, policyType, policyBackgroundMode, policyNamespace, policyName, ruleName, ruleType, PolicyRuleCreated); err != nil {
+			if err = pm.registerPolicyRuleInfoMetric(policyValidationMode, policyType, policyBackgroundMode, policyNamespace, policyName, ruleName, ruleType, PolicyRuleCreated); err != nil {
 				return err
 			}
 		}
@@ -77,7 +78,7 @@ func (pm PromMetrics) AddPolicy(policy interface{}) error {
 			ruleName := rule.Name
 			ruleType := metrics.ParseRuleType(rule)
 
-			if err = pm.registerPolicyRuleCountMetric(policyValidationMode, policyType, policyBackgroundMode, policyNamespace, policyName, ruleName, ruleType, PolicyRuleCreated); err != nil {
+			if err = pm.registerPolicyRuleInfoMetric(policyValidationMode, policyType, policyBackgroundMode, policyNamespace, policyName, ruleName, ruleType, PolicyRuleCreated); err != nil {
 				return err
 			}
 		}
@@ -102,7 +103,7 @@ func (pm PromMetrics) RemovePolicy(policy interface{}) error {
 			ruleName := rule.Name
 			ruleType := metrics.ParseRuleType(rule)
 
-			if err = pm.registerPolicyRuleCountMetric(policyValidationMode, policyType, policyBackgroundMode, policyNamespace, policyName, ruleName, ruleType, PolicyRuleDeleted); err != nil {
+			if err = pm.registerPolicyRuleInfoMetric(policyValidationMode, policyType, policyBackgroundMode, policyNamespace, policyName, ruleName, ruleType, PolicyRuleDeleted); err != nil {
 				return err
 			}
 		}
@@ -120,7 +121,7 @@ func (pm PromMetrics) RemovePolicy(policy interface{}) error {
 			ruleName := rule.Name
 			ruleType := metrics.ParseRuleType(rule)
 
-			if err = pm.registerPolicyRuleCountMetric(policyValidationMode, policyType, policyBackgroundMode, policyNamespace, policyName, ruleName, ruleType, PolicyRuleDeleted); err != nil {
+			if err = pm.registerPolicyRuleInfoMetric(policyValidationMode, policyType, policyBackgroundMode, policyNamespace, policyName, ruleName, ruleType, PolicyRuleDeleted); err != nil {
 				return err
 			}
 		}

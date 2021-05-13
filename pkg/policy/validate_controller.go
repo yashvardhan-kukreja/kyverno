@@ -20,7 +20,7 @@ import (
 	"github.com/kyverno/kyverno/pkg/event"
 	"github.com/kyverno/kyverno/pkg/kyverno/common"
 	"github.com/kyverno/kyverno/pkg/metrics"
-	policyRuleCountMetric "github.com/kyverno/kyverno/pkg/metrics/policy_rule_count"
+	policyRuleInfoMetric "github.com/kyverno/kyverno/pkg/metrics/policyruleinfo"
 	pm "github.com/kyverno/kyverno/pkg/policymutation"
 	"github.com/kyverno/kyverno/pkg/policyreport"
 	"github.com/kyverno/kyverno/pkg/resourcecache"
@@ -197,19 +197,41 @@ func (pc *PolicyController) canBackgroundProcess(p *kyverno.ClusterPolicy) bool 
 	return true
 }
 
+func (pc *PolicyController) registerPolicyRuleInfoMetricAddPolicy(logger logr.Logger, p *kyverno.ClusterPolicy) {
+	err := policyRuleInfoMetric.ParsePromMetrics(*pc.promConfig.Metrics).AddPolicy(p)
+	if err != nil {
+		logger.Error(err, "error occurred while registering kyverno_policy_rule_info_total metrics for the above policy's creation", "name", p.Name)
+	}
+}
+
+func (pc *PolicyController) registerPolicyRuleInfoMetricUpdatePolicy(logger logr.Logger, oldP, curP *kyverno.ClusterPolicy) {
+	// removing the old rules associated metrics
+	err := policyRuleInfoMetric.ParsePromMetrics(*pc.promConfig.Metrics).RemovePolicy(oldP)
+	if err != nil {
+		logger.Error(err, "error occurred while registering kyverno_policy_rule_info_total metrics for the above policy's updation", "name", oldP.Name)
+	}
+	// adding the new rules associated metrics
+	err = policyRuleInfoMetric.ParsePromMetrics(*pc.promConfig.Metrics).AddPolicy(curP)
+	if err != nil {
+		logger.Error(err, "error occurred while registering kyverno_policy_rule_info_total metrics for the above policy's updation", "name", oldP.Name)
+	}
+}
+
+func (pc *PolicyController) registerPolicyRuleInfoMetricDeletePolicy(logger logr.Logger, p *kyverno.ClusterPolicy) {
+	err := policyRuleInfoMetric.ParsePromMetrics(*pc.promConfig.Metrics).RemovePolicy(p)
+	if err != nil {
+		logger.Error(err, "error occurred while registering kyverno_policy_rule_info_total metrics for the above policy's deletion", "name", p.Name)
+	}
+}
+
 func (pc *PolicyController) addPolicy(obj interface{}) {
 	logger := pc.log
 	p := obj.(*kyverno.ClusterPolicy)
 
 	logger.Info("policy created", "uid", p.UID, "kind", "ClusterPolicy", "name", p.Name)
 
-	// register kyverno_policy_rule_count metric concurrently
-	go func(p *kyverno.ClusterPolicy) {
-		err := policyRuleCountMetric.ParsePromMetrics(*pc.promConfig.Metrics).AddPolicy(p)
-		if err != nil {
-			logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_count metrics for the above policy's creation", "name", p.Name)
-		}
-	}(p)
+	// register kyverno_policy_rule_info_total metric concurrently
+	go pc.registerPolicyRuleInfoMetricAddPolicy(logger, p)
 
 	if p.Spec.Background == nil || p.Spec.ValidationFailureAction == "" || missingAutoGenRules(p, logger) {
 		pol, _ := common.MutatePolicy(p, logger)
@@ -233,19 +255,8 @@ func (pc *PolicyController) updatePolicy(old, cur interface{}) {
 	oldP := old.(*kyverno.ClusterPolicy)
 	curP := cur.(*kyverno.ClusterPolicy)
 
-	// register kyverno_policy_rule_count metric concurrently
-	go func(oldP, curP *kyverno.ClusterPolicy) {
-		// removing the old rules associated metrics
-		err := policyRuleCountMetric.ParsePromMetrics(*pc.promConfig.Metrics).RemovePolicy(oldP)
-		if err != nil {
-			logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_count metrics for the above policy's updation", "name", oldP.Name)
-		}
-		// adding the new rules associated metrics
-		err = policyRuleCountMetric.ParsePromMetrics(*pc.promConfig.Metrics).AddPolicy(curP)
-		if err != nil {
-			logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_count metrics for the above policy's updation", "name", oldP.Name)
-		}
-	}(oldP, curP)
+	// register kyverno_policy_rule_info_total metric concurrently
+	go pc.registerPolicyRuleInfoMetricUpdatePolicy(logger, oldP, curP)
 
 	if curP.Spec.Background == nil || curP.Spec.ValidationFailureAction == "" || missingAutoGenRules(curP, logger) {
 		pol, _ := common.MutatePolicy(curP, logger)
@@ -288,13 +299,8 @@ func (pc *PolicyController) deletePolicy(obj interface{}) {
 		}
 	}
 
-	// register kyverno_policy_rule_count metric concurrently
-	go func(p *kyverno.ClusterPolicy) {
-		err := policyRuleCountMetric.ParsePromMetrics(*pc.promConfig.Metrics).RemovePolicy(p)
-		if err != nil {
-			logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_count metrics for the above policy's deletion", "name", p.Name)
-		}
-	}(p)
+	// register kyverno_policy_rule_info_total metric concurrently
+	go pc.registerPolicyRuleInfoMetricDeletePolicy(logger, p)
 
 	logger.Info("policy deleted", "uid", p.UID, "kind", "ClusterPolicy", "name", p.Name)
 
@@ -304,17 +310,39 @@ func (pc *PolicyController) deletePolicy(obj interface{}) {
 	pc.enqueueRCRDeletedPolicy(p.Name)
 }
 
+func (pc *PolicyController) registerPolicyRuleInfoMetricAddNsPolicy(logger logr.Logger, p *kyverno.Policy) {
+	err := policyRuleInfoMetric.ParsePromMetrics(*pc.promConfig.Metrics).AddPolicy(p)
+	if err != nil {
+		logger.Error(err, "error occurred while registering kyverno_policy_rule_info_total metrics for the above policy's creation", "name", p.Name)
+	}
+}
+
+func (pc *PolicyController) registerPolicyRuleInfoMetricUpdateNsPolicy(logger logr.Logger, oldP, curP *kyverno.Policy) {
+	// removing the old rules associated metrics
+	err := policyRuleInfoMetric.ParsePromMetrics(*pc.promConfig.Metrics).RemovePolicy(oldP)
+	if err != nil {
+		logger.Error(err, "error occurred while registering kyverno_policy_rule_info_total metrics for the above policy's updation", "name", oldP.Name)
+	}
+	// adding the new rules associated metrics
+	err = policyRuleInfoMetric.ParsePromMetrics(*pc.promConfig.Metrics).AddPolicy(curP)
+	if err != nil {
+		logger.Error(err, "error occurred while registering kyverno_policy_rule_info_total metrics for the above policy's updation", "name", oldP.Name)
+	}
+}
+
+func (pc *PolicyController) registerPolicyRuleInfoMetricDeleteNsPolicy(logger logr.Logger, p *kyverno.Policy) {
+	err := policyRuleInfoMetric.ParsePromMetrics(*pc.promConfig.Metrics).RemovePolicy(p)
+	if err != nil {
+		logger.Error(err, "error occurred while registering kyverno_policy_rule_info_total metrics for the above policy's deletion", "name", p.Name)
+	}
+}
+
 func (pc *PolicyController) addNsPolicy(obj interface{}) {
 	logger := pc.log
 	p := obj.(*kyverno.Policy)
 
-	// register kyverno_policy_rule_count metric concurrently
-	go func(p *kyverno.Policy) {
-		err := policyRuleCountMetric.ParsePromMetrics(*pc.promConfig.Metrics).AddPolicy(p)
-		if err != nil {
-			logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_count metrics for the above policy's creation", "name", p.Name)
-		}
-	}(p)
+	// register kyverno_policy_rule_info_total metric concurrently
+	go pc.registerPolicyRuleInfoMetricAddNsPolicy(logger, p)
 
 	logger.Info("policy created", "uid", p.UID, "kind", "Policy", "name", p.Name, "namespaces", p.Namespace)
 
@@ -339,19 +367,8 @@ func (pc *PolicyController) updateNsPolicy(old, cur interface{}) {
 	oldP := old.(*kyverno.Policy)
 	curP := cur.(*kyverno.Policy)
 
-	// register kyverno_policy_rule_count metric concurrently
-	go func(oldP, curP *kyverno.Policy) {
-		// removing the old rules associated metrics
-		err := policyRuleCountMetric.ParsePromMetrics(*pc.promConfig.Metrics).RemovePolicy(oldP)
-		if err != nil {
-			logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_count metrics for the above policy's updation", "name", oldP.Name)
-		}
-		// adding the new rules associated metrics
-		err = policyRuleCountMetric.ParsePromMetrics(*pc.promConfig.Metrics).AddPolicy(curP)
-		if err != nil {
-			logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_count metrics for the above policy's updation", "name", oldP.Name)
-		}
-	}(oldP, curP)
+	// register kyverno_policy_rule_info_total metric concurrently
+	go pc.registerPolicyRuleInfoMetricUpdateNsPolicy(logger, oldP, curP)
 
 	ncurP := ConvertPolicyToClusterPolicy(curP)
 
@@ -395,13 +412,8 @@ func (pc *PolicyController) deleteNsPolicy(obj interface{}) {
 		}
 	}
 
-	// register kyverno_policy_rule_count metric concurrently
-	go func(p *kyverno.Policy) {
-		err := policyRuleCountMetric.ParsePromMetrics(*pc.promConfig.Metrics).RemovePolicy(p)
-		if err != nil {
-			logger.V(4).Error(err, "error occurred while registering kyverno_policy_rule_count metrics for the above policy's deletion", "name", p.Name)
-		}
-	}(p)
+	// register kyverno_policy_rule_info_total metric concurrently
+	go pc.registerPolicyRuleInfoMetricDeleteNsPolicy(logger, p)
 
 	logger.Info("policy deleted event", "uid", p.UID, "kind", "Policy", "policy_name", p.Name, "namespaces", p.Namespace)
 

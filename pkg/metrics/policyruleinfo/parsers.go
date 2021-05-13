@@ -1,11 +1,12 @@
-package policy_rule_count
+package policyruleinfo
 
 import (
 	"fmt"
+
 	"github.com/kyverno/kyverno/pkg/metrics"
 )
 
-func ParsePolicyRuleCountMetricChangeType(change string) (PolicyRuleCountMetricChangeType, error) {
+func ParsePolicyRuleInfoMetricChangeType(change string) (PolicyRuleInfoMetricChangeType, error) {
 	if change == "created" {
 		return PolicyRuleCreated, nil
 	}
