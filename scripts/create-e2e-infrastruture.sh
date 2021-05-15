@@ -21,3 +21,4 @@ curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack
 kustomize edit set image ghcr.io/kyverno/kyverno:$hash
 kustomize edit set image ghcr.io/kyverno/kyvernopre:$hash
 kustomize build $pwd/definitions/ -o $pwd/definitions/install.yaml
+kubectl port-forward svc/kyverno-svc -n kyverno 8000:8000 &
